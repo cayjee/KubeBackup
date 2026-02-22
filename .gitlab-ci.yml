@@ -1,0 +1,39 @@
+stages:
+  - test
+  - deploy
+
+# 1. Vérification rapide du cluster
+check-k8s:
+  stage: test
+  tags:
+    - KubeRunner
+  script:
+    - export KUBECONFIG=/home/gitlab-runner/.kube/config
+    - kubectl get nodes
+
+# 2. Déploiement complet (App + Backup)
+deploy-all:
+  stage: deploy
+  tags:
+    - KubeRunner
+  script:
+    - export KUBECONFIG=/home/gitlab-runner/.kube/config
+    
+    # Nettoyage des scripts (fins de ligne Windows)
+    - sed -i 's/\r$//' backup.sh
+    - sed -i 's/\r$//' restore.sh
+    
+    # Configuration de l'environnement de PRODUCTION (Backup)
+    - kubectl delete configmap backup-script -n app-test --ignore-not-found
+    - kubectl create configmap backup-script --from-file=backup.sh -n app-test
+    - kubectl apply -f postgres.yaml
+    - kubectl apply -f backup-cronjob.yaml
+    
+    # Configuration de l'environnement de TEST (Restore)
+    - kubectl delete configmap restore-script -n app-restore-test --ignore-not-found
+    - kubectl create configmap restore-script --from-file=restore.sh -n app-restore-test
+    - kubectl apply -f postgres-restore.yaml
+    - kubectl apply -f restore-cronjob.yaml
+
+
+

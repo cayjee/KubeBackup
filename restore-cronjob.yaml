@@ -1,0 +1,55 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-restore-test-cronjob
+  namespace: app-restore-test
+spec:
+  schedule: "2,12,22,32,42,52 * * * *" # Se lance 2 min après chaque backup (*/10)
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: postgres-restore
+            image: postgres:15-alpine
+            env:
+            - name: POSTGRES_USER
+              value: "postgres"
+            - name: POSTGRES_DB
+              value: "postgres"
+            - name: POSTGRES_HOST
+              value: "postgres-restore-service"
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-secret
+                  key: POSTGRES_PASSWORD
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: s3-credentials
+                  key: S3_ACCESS_KEY
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: s3-credentials
+                  key: S3_SECRET_KEY
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: s3-credentials
+                  key: S3_REGION
+            - name: S3_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: s3-credentials
+                  key: S3_BUCKET
+            volumeMounts:
+            - name: script-volume
+              mountPath: /scripts
+            command: ["/bin/sh", "/scripts/restore.sh"]
+          restartPolicy: OnFailure
+          volumes:
+          - name: script-volume
+            configMap:
+              name: restore-script
